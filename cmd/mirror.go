@@ -19,16 +19,35 @@ import (
 	"log"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/mrsimonemms/historian/pkg/drivers"
 	"github.com/spf13/cobra"
 )
+
+var mirrorOpts struct {
+	Driver   drivers.Driver
+	FilePath string
+}
 
 // mirrorCmd represents the mirror command
 var mirrorCmd = &cobra.Command{
 	Use:   "mirror",
 	Short: "Mirror your terminal history",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		historyFile := args[0]
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// There must be one argument, which is the file we're watching
+		cobra.CheckErr(cobra.ExactArgs(1)(cmd, args))
+
+		mirrorOpts.FilePath = args[0]
+
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		// Use a persistent post run command as each of the subcommands is there
+		// to create the configuration only. The execution happens here.
+		//
+		// There can be only one PersistentPostRun command.
+
+		// Validate the driver
+		cobra.CheckErr(mirrorOpts.Driver.Login())
 
 		// Create new watcher.
 		watcher, err := fsnotify.NewWatcher()
@@ -61,10 +80,10 @@ var mirrorCmd = &cobra.Command{
 		}()
 
 		// Add a path.
-		err = watcher.Add(historyFile)
+		err = watcher.Add(mirrorOpts.FilePath)
 		cobra.CheckErr(err)
 
-		log.Println("Watching for changes in", historyFile)
+		log.Println("Watching for changes in", mirrorOpts.FilePath)
 
 		// Block main goroutine forever.
 		<-make(chan struct{})
